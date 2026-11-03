@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: rootiq-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rootiq}
+      POSTGRES_USER: ${POSTGRES_USER:-rootiq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rootiq_dev_password}
+    ports:
+      - "5433:5432"
+    volumes:
+      - rootiq_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rootiq} -d ${POSTGRES_DB:-rootiq}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  rootiq_postgres_data:

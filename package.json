@@ -1,0 +1,18 @@
+{
+  "name": "rootiq-ai",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "concurrently -n WEB,API -c cyan,green \"npm run dev -w @rootiq/web\" \"npm run start:dev -w @rootiq/api\"",
+    "build": "npm run build -w @rootiq/api && npm run build -w @rootiq/web",
+    "typecheck": "npm run typecheck -w @rootiq/web && npm run typecheck -w @rootiq/api",
+    "db:generate": "npm run prisma:generate -w @rootiq/api",
+    "db:migrate": "npm run prisma:migrate -w @rootiq/api --",
+    "db:seed": "npm run prisma:seed -w @rootiq/api",
+    "db:studio": "npm run prisma:studio -w @rootiq/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

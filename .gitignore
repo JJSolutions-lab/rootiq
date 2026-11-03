@@ -1,3 +1,17 @@
 rootiq-*.png
 *.tar.gz
 .DS_Store
+node_modules/
+.next/
+coverage/
+dist/
+.env
+.env.local
+apps/api/prisma/dev.db
+apps/api/src/generated/
+*.tsbuildinfo
+services/vision/.venv/
+__pycache__/
+*.pyc
+api*-out.log
+api*-err.log
