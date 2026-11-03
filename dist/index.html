@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#07111d" />
+  <meta name="description" content="RootIQ AI manufacturing quality intelligence dashboard" />
+  <title>RootIQ AI — Manufacturing Quality Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><span></span><span></span><span></span></div>
+        <div><strong>RootIQ <em>AI</em></strong><small>Quality Intelligence</small></div>
+      </div>
+
+      <div class="site-switcher">
+        <div class="site-icon">AS</div>
+        <div><strong>Aditya Solar</strong><small>Plant · Chennai</small></div>
+        <button aria-label="Switch plant">⌄</button>
+      </div>
+
+      <nav class="nav" aria-label="Main navigation">
+        <p>Workspace</p>
+        <button class="nav-item active" data-view="dashboard"><i data-icon="grid"></i><span>Overview</span></button>
+        <button class="nav-item" data-view="defects"><i data-icon="alert"></i><span>Defects</span><b>12</b></button>
+        <button class="nav-item" data-view="rca"><i data-icon="nodes"></i><span>Root cause analysis</span></button>
+        <button class="nav-item" data-view="capa"><i data-icon="checklist"></i><span>CAPA actions</span><b class="amber">7</b></button>
+        <button class="nav-item" data-view="inspections"><i data-icon="search"></i><span>Inspections</span></button>
+        <p>Operations</p>
+        <button class="nav-item" data-view="production"><i data-icon="pulse"></i><span>Production</span></button>
+        <button class="nav-item" data-view="equipment"><i data-icon="tool"></i><span>Equipment</span></button>
+        <button class="nav-item" data-view="reports"><i data-icon="chart"></i><span>Reports</span></button>
+      </nav>
+
+      <div class="sidebar-insight">
+        <div class="ai-orb">✦</div>
+        <strong>AI quality pulse</strong>
+        <p>Cell microcracks are trending down 18% after the last corrective action.</p>
+        <button data-view="rca">View insight <span>→</span></button>
+      </div>
+
+      <div class="profile">
+        <div class="avatar">JK</div>
+        <div><strong>Jeevan Kumar</strong><small>Quality Manager</small></div>
+        <button aria-label="Profile menu">•••</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn mobile-menu" id="menuBtn" aria-label="Open navigation"><i data-icon="menu"></i></button>
+        <div class="breadcrumbs"><span>Aditya Solar</span><b>/</b><strong id="pageCrumb">Overview</strong></div>
+        <div class="top-actions">
+          <button class="search-trigger" id="searchBtn"><i data-icon="search"></i><span>Search anything...</span><kbd>⌘ K</kbd></button>
+          <button class="icon-btn notification" aria-label="Notifications"><i data-icon="bell"></i><span></span></button>
+          <button class="primary-btn" id="newIssueBtn"><span>＋</span> New issue</button>
+        </div>
+      </header>
+
+      <div class="content" id="content"></div>
+    </main>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+  <div class="modal-wrap" id="issueModal" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-head"><div><span class="eyebrow">QUALITY EVENT</span><h2>Register a new issue</h2><p>Capture the problem now. Investigation details can be added later.</p></div><button class="close-modal" aria-label="Close">×</button></div>
+      <form id="issueForm">
+        <div class="form-grid">
+          <label class="wide">Issue title<input required name="title" placeholder="e.g. Microcracks detected after lamination" /></label>
+          <label>Production line<select name="line"><option>Line 03</option><option>Line 01</option><option>Line 02</option><option>Line 04</option></select></label>
+          <label>Severity<select name="severity"><option>High</option><option>Critical</option><option>Medium</option><option>Low</option></select></label>
+          <label>Product<select name="product"><option>550W Mono PERC Panel</option><option>450W Bifacial Panel</option><option>600W TOPCon Panel</option></select></label>
+          <label>Defective quantity<input required name="quantity" type="number" min="1" value="24" /></label>
+          <label class="wide">Initial observation<textarea name="notes" placeholder="Describe where, when, and how the issue was found..."></textarea></label>
+        </div>
+        <div class="form-foot"><button type="button" class="secondary-btn close-modal">Cancel</button><button type="submit" class="primary-btn">Create issue & start RCA</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="command" id="command" aria-hidden="true">
+    <div class="command-box"><div class="command-input"><i data-icon="search"></i><input id="commandInput" placeholder="Search defects, CAPAs, batches, or reports..."/><kbd>ESC</kbd></div><div class="command-results"><p>QUICK ACTIONS</p><button data-view="defects"><i data-icon="alert"></i><span>Open defect register<small>Review active non-conformances</small></span><em>→</em></button><button data-view="rca"><i data-icon="nodes"></i><span>Start root cause analysis<small>Launch guided 5 Whys investigation</small></span><em>→</em></button><button data-view="capa"><i data-icon="checklist"></i><span>Review overdue CAPAs<small>3 actions need attention</small></span><em>→</em></button></div></div>
+  </div>
+
+  <div class="toast" id="toast"><span>✓</span><div><strong>Issue created</strong><small>Your investigation workspace is ready.</small></div></div>
+  <script src="app.js"></script>
+</body>
+</html>
