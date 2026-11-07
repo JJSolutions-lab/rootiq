@@ -9,9 +9,10 @@ import { AiController, AiService } from './ai';
 import { ReportsController } from './reports';
 import { ReferenceController } from './reference';
 import { TokenService } from './token.service';
+import { InspectionsController, OperationsController, RcaController, VirtualMachineService } from './operations';
 
 @Module({
-  controllers: [AuthController, DashboardController, DefectsController, CapaController, AiController, ReportsController, ReferenceController],
-  providers: [PrismaService, TokenService, AuthService, AiService, JwtAuthGuard],
+  controllers: [AuthController, DashboardController, DefectsController, CapaController, AiController, ReportsController, ReferenceController, RcaController, InspectionsController, OperationsController],
+  providers: [PrismaService, TokenService, AuthService, AiService, JwtAuthGuard, VirtualMachineService],
 })
 export class AppModule {}

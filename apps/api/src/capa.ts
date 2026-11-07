@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { IsDateString, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 import type { Request } from 'express';
 import { ActionType } from '@prisma/client';
 import { JwtAuthGuard, SessionUser } from './jwt.guard';
 import { PrismaService } from './prisma.service';
+import { dateRange } from './date-range';
 
 class CreateActionDto {
   @IsString() @MinLength(3) title!: string;
@@ -17,8 +18,9 @@ class CreateActionDto {
 @Controller('capa') @UseGuards(JwtAuthGuard)
 export class CapaController {
   constructor(private readonly prisma: PrismaService) {}
-  @Get() list(@Req() req: Request & { user: SessionUser }) {
-    return this.prisma.capaAction.findMany({ where: { tenantId: req.user.tenantId }, include: { defect: { select: { reference: true, title: true } }, owner: { select: { id: true, name: true } } }, orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }] });
+  @Get() list(@Req() req: Request & { user: SessionUser }, @Query('from') from?: string, @Query('to') to?: string) {
+    const range = dateRange(from, to);
+    return this.prisma.capaAction.findMany({ where: { tenantId: req.user.tenantId, ...(range ? { createdAt: range } : {}) }, include: { defect: { select: { reference: true, title: true } }, owner: { select: { id: true, name: true } } }, orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }] });
   }
   @Post() create(@Req() req: Request & { user: SessionUser }, @Body() dto: CreateActionDto) {
     return this.prisma.capaAction.create({ data: { ...dto, tenantId: req.user.tenantId, dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined } });

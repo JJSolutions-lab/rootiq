@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { PrismaService } from './prisma.service';
 import { JwtAuthGuard, SessionUser } from './jwt.guard';
 import { DefectStatus, Severity } from '@prisma/client';
+import { dateRange } from './date-range';
 
 class CreateDefectDto {
   @IsString() @MinLength(3) title!: string;
@@ -28,9 +29,9 @@ class UpdateDefectDto {
 export class DefectsController {
   constructor(private readonly prisma: PrismaService) {}
   @Get()
-  list(@Req() req: Request & { user: SessionUser }, @Query('search') search?: string) {
+  list(@Req() req: Request & { user: SessionUser }, @Query('search') search?: string, @Query('from') from?: string, @Query('to') to?: string) {
     return this.prisma.defect.findMany({
-      where: { tenantId: req.user.tenantId, ...(search ? { OR: [{ title: { contains: search, mode: 'insensitive' } }, { reference: { contains: search, mode: 'insensitive' } }, { batchNumber: { contains: search, mode: 'insensitive' } }] } : {}) },
+      where: { tenantId: req.user.tenantId, ...(dateRange(from, to) ? { detectedAt: dateRange(from, to) } : {}), ...(search ? { OR: [{ title: { contains: search, mode: 'insensitive' } }, { reference: { contains: search, mode: 'insensitive' } }, { batchNumber: { contains: search, mode: 'insensitive' } }] } : {}) },
       include: { line: true, product: true, owner: { select: { id: true, name: true } }, rootCause: true },
       orderBy: { createdAt: 'desc' },
     });

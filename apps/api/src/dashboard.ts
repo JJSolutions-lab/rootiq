@@ -1,20 +1,23 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { PrismaService } from './prisma.service';
 import { JwtAuthGuard, SessionUser } from './jwt.guard';
+import { dateRange } from './date-range';
 
 @Controller('dashboard') @UseGuards(JwtAuthGuard)
 export class DashboardController {
   constructor(private readonly prisma: PrismaService) {}
   @Get('summary')
-  async summary(@Req() req: Request & { user: SessionUser }) {
+  async summary(@Req() req: Request & { user: SessionUser }, @Query('from') from?: string, @Query('to') to?: string) {
     const tenantId = req.user.tenantId;
+    const range = dateRange(from, to);
+    const defectWhere = { tenantId, ...(range ? { detectedAt: range } : {}) };
     const [openIssues, criticalIssues, actions, inspections, recentIssues] = await Promise.all([
-      this.prisma.defect.count({ where: { tenantId, status: { not: 'CLOSED' } } }),
-      this.prisma.defect.count({ where: { tenantId, severity: 'CRITICAL', status: { not: 'CLOSED' } } }),
-      this.prisma.capaAction.findMany({ where: { tenantId } }),
-      this.prisma.inspection.findMany({ where: { tenantId }, orderBy: { performedAt: 'desc' }, take: 250 }),
-      this.prisma.defect.findMany({ where: { tenantId }, include: { line: true, product: true, owner: { select: { name: true } } }, orderBy: { updatedAt: 'desc' }, take: 6 }),
+      this.prisma.defect.count({ where: { ...defectWhere, status: { not: 'CLOSED' } } }),
+      this.prisma.defect.count({ where: { ...defectWhere, severity: 'CRITICAL', status: { not: 'CLOSED' } } }),
+      this.prisma.capaAction.findMany({ where: { tenantId, ...(range ? { createdAt: range } : {}) } }),
+      this.prisma.inspection.findMany({ where: { tenantId, ...(range ? { performedAt: range } : {}) }, orderBy: { performedAt: 'desc' }, take: 250 }),
+      this.prisma.defect.findMany({ where: defectWhere, include: { line: true, product: true, owner: { select: { name: true } } }, orderBy: { updatedAt: 'desc' }, take: 6 }),
     ]);
     const checked = inspections.reduce((n, x) => n + x.checked, 0);
     const failed = inspections.reduce((n, x) => n + x.failed, 0);

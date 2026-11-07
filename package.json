@@ -9,8 +9,10 @@
     "typecheck": "npm run typecheck -w @rootiq/web && npm run typecheck -w @rootiq/api",
     "db:generate": "npm run prisma:generate -w @rootiq/api",
     "db:migrate": "npm run prisma:migrate -w @rootiq/api --",
+    "db:deploy": "npm run prisma:deploy -w @rootiq/api",
     "db:seed": "npm run prisma:seed -w @rootiq/api",
     "db:studio": "npm run prisma:studio -w @rootiq/api"
+    ,"simulate": "node scripts/solar-machine-simulator.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

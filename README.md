@@ -27,6 +27,16 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Virtual solar manufacturing machine
+
+With the API and web app running, open a second PowerShell window and run:
+
+```powershell
+npm run simulate
+```
+
+The simulator sends a production record and EL inspection every five seconds. High rejection cycles also create a quality issue automatically. For a short test, use `npm run simulate -- --cycles=3`. Configure it with `SIM_API_URL`, `SIM_EMAIL`, `SIM_PASSWORD`, and `SIM_INTERVAL_MS` environment variables.
+
 Seeded administrator:
 
 - Email: `admin@rootiq.local`
@@ -58,3 +68,40 @@ The vision endpoint accepts real images but deliberately returns no fabricated d
 - Put the NestJS API and Python service behind HTTPS.
 - Configure object storage before enabling evidence and EL-image uploads.
 - Run Prisma migrations during deployment before starting the API.
+
+## Connect a cPanel PostgreSQL database
+
+1. In **PostgreSQL Databases**, create a database such as `rootiq`. cPanel
+   automatically adds the account prefix, for example `jeevame_rootiq`.
+2. Under **PostgreSQL Users**, create a separate user with a strong password.
+3. Add that user to the database and grant **All Privileges**.
+4. In the cPanel Node.js application's environment variables, configure:
+
+```text
+DATABASE_URL=postgresql://CPANEL_DB_USER:URL_ENCODED_PASSWORD@localhost:5432/CPANEL_DB_NAME?schema=public
+JWT_SECRET=GENERATE_A_LONG_RANDOM_SECRET
+COOKIE_SECURE=true
+WEB_ORIGIN=https://your-web-domain.example
+NEXT_PUBLIC_API_URL=https://your-api-domain.example/api
+```
+
+Use the exact prefixed database and user names shown by cPanel. If PostgreSQL
+is hosted on another server, replace `localhost`, allow the API server in
+**Remote PostgreSQL**, and add `&sslmode=require` when the provider requires
+TLS. Never put the database password in frontend code or in
+`NEXT_PUBLIC_*` variables.
+
+After uploading/installing the application, initialize the production schema:
+
+```powershell
+npm install
+npm run db:generate
+npm run db:deploy
+npm run db:seed
+npm run build
+```
+
+Run `db:seed` only for a new database. Start the API with
+`npm run start -w @rootiq/api` and the web app with
+`npm run start -w @rootiq/web` (or configure these as separate cPanel Node.js
+applications).

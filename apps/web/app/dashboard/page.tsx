@@ -1,47 +1,1055 @@
-'use client';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import * as Dialog from '@radix-ui/react-dialog';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Activity, AlertTriangle, BarChart3, Bell, Bot, CalendarDays, CheckCircle2, ClipboardCheck, FileSearch, Gauge, LayoutDashboard, LogOut, Menu, Plus, Search, Settings2, ShieldCheck, Sparkles, Target, Wrench, X } from 'lucide-react';
-import { api, API_URL } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+"use client";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import * as Dialog from "@radix-ui/react-dialog";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  Bell,
+  Bot,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardCheck,
+  FileSearch,
+  Gauge,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Loader2,
+  Play,
+  Plus,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  Wrench,
+  X,
+  Square,
+} from "lucide-react";
+import { api, API_URL } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import {
+  EquipmentModule,
+  InspectionsModule,
+  ProductionModule,
+  RcaWorkspace,
+  ReportsModule,
+} from "@/components/product-modules";
+import {
+  buildRangeQuery,
+  DateRangeFilter,
+  type RangePreset,
+} from "@/components/date-range-filter";
 
-type User={id:string;name:string;email:string;role:string;tenant:{id:string;name:string}};
-type Defect={id:string;reference:string;title:string;description?:string;severity:string;status:string;batchNumber?:string;quantityDefective:number;detectedAt:string;line?:{id:string;name:string};product?:{id:string;name:string};owner?:{id:string;name:string}};
-type Summary={kpis:{firstPassYield:number;openIssues:number;criticalIssues:number;capaOnTimeRate:number;costOfPoorQuality:number};recentIssues:Defect[];trend:{date:string;yield:number;defectRate:number}[]};
-type Refs={lines:{id:string;name:string}[];products:{id:string;name:string}[];users:{id:string;name:string;role:string}[]};
-type Action={id:string;title:string;type:string;status:string;dueAt?:string;defect?:{reference:string;title:string};owner?:{name:string}};
-const nav=[['Overview',LayoutDashboard],['Defects',AlertTriangle],['Root cause analysis',Target],['CAPA actions',ClipboardCheck],['Inspections',FileSearch],['Production',Gauge],['Equipment',Wrench],['Reports',BarChart3]] as const;
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tenant: { id: string; name: string };
+};
+type Defect = {
+  id: string;
+  reference: string;
+  title: string;
+  description?: string;
+  severity: string;
+  status: string;
+  batchNumber?: string;
+  quantityDefective: number;
+  detectedAt: string;
+  line?: { id: string; name: string };
+  product?: { id: string; name: string };
+  owner?: { id: string; name: string };
+};
+type Summary = {
+  kpis: {
+    firstPassYield: number;
+    openIssues: number;
+    criticalIssues: number;
+    capaOnTimeRate: number;
+    costOfPoorQuality: number;
+  };
+  recentIssues: Defect[];
+  trend: { date: string; yield: number; defectRate: number }[];
+};
+type Refs = {
+  lines: { id: string; name: string }[];
+  products: { id: string; name: string }[];
+  users: { id: string; name: string; role: string }[];
+};
+type Action = {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  dueAt?: string;
+  createdAt: string;
+  defect?: { reference: string; title: string };
+  owner?: { name: string };
+};
+type MachineStatus = {
+  running: boolean;
+  cycle: number;
+  startedAt?: string;
+  lastCycleAt?: string;
+  error?: string;
+};
+const nav = [
+  ["Overview", LayoutDashboard],
+  ["Defects", AlertTriangle],
+  ["Root cause analysis", Target],
+  ["CAPA actions", ClipboardCheck],
+  ["Inspections", FileSearch],
+  ["Production", Gauge],
+  ["Equipment", Wrench],
+  ["Reports", BarChart3],
+] as const;
 
-function Logo(){return <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-700 text-white"><Activity size={21}/></span><div><b className="text-lg text-white">RootIQ <span className="text-emerald-400">AI</span></b><small className="block text-[9px] tracking-widest text-slate-500">QUALITY INTELLIGENCE</small></div></div>}
-function Pill({value}:{value:string}){const color=value==='CRITICAL'||value==='HIGH'||value==='FAILED'?'bg-red-50 text-red-700':value==='MEDIUM'||value==='IN_PROGRESS'||value==='INVESTIGATING'?'bg-amber-50 text-amber-700':value==='CLOSED'||value==='VERIFIED'||value==='COMPLETED'?'bg-emerald-50 text-emerald-700':'bg-blue-50 text-blue-700';return <span className={cn('inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold',color)}>{value.replaceAll('_',' ')}</span>}
-function Kpi({label,value,detail,icon:Icon,tone='emerald'}:{label:string;value:string;detail:string;icon:any;tone?:'emerald'|'red'|'amber'|'blue'}){const tones={emerald:'bg-emerald-50 text-emerald-700',red:'bg-red-50 text-red-600',amber:'bg-amber-50 text-amber-600',blue:'bg-blue-50 text-blue-600'};return <Card className="p-5"><div className="flex items-start justify-between"><p className="text-xs font-semibold text-slate-500">{label}</p><span className={cn('grid size-9 place-items-center rounded-xl',tones[tone])}><Icon size={17}/></span></div><p className="mb-1 mt-5 text-3xl font-bold tracking-tight text-slate-900">{value}</p><p className="text-[11px] text-slate-400">{detail}</p></Card>}
-
-export default function DashboardPage(){
- const router=useRouter(); const [user,setUser]=useState<User>(); const [summary,setSummary]=useState<Summary>(); const [defects,setDefects]=useState<Defect[]>([]); const [actions,setActions]=useState<Action[]>([]); const [refs,setRefs]=useState<Refs>({lines:[],products:[],users:[]}); const [active,setActive]=useState('Overview'); const [mobile,setMobile]=useState(false); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [busy,setBusy]=useState(false); const [error,setError]=useState('');
- const load=async()=>{try{const [me,s,d,a,r]=await Promise.all([api<User>('/auth/me'),api<Summary>('/dashboard/summary'),api<Defect[]>('/defects'),api<Action[]>('/capa'),api<Refs>('/reference')]);setUser(me);setSummary(s);setDefects(d);setActions(a);setRefs(r)}catch(e){setError(e instanceof Error?e.message:'Unable to load product data')}};
- useEffect(()=>{load()},[]);
- async function logout(){await api('/auth/logout',{method:'POST'});router.push('/login')}
- async function createDefect(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const fd=new FormData(e.currentTarget);try{await api('/defects',{method:'POST',body:JSON.stringify({title:fd.get('title'),description:fd.get('description'),severity:fd.get('severity'),lineId:fd.get('lineId')||undefined,productId:fd.get('productId')||undefined,ownerId:fd.get('ownerId')||undefined,batchNumber:fd.get('batchNumber')||undefined,quantityChecked:Number(fd.get('quantityChecked')),quantityDefective:Number(fd.get('quantityDefective'))})});setOpen(false);await load();setActive('Defects')}catch(e){setError(e instanceof Error?e.message:'Unable to create issue')}finally{setBusy(false)}}
- const filtered=useMemo(()=>defects.filter(x=>`${x.reference} ${x.title} ${x.batchNumber}`.toLowerCase().includes(search.toLowerCase())),[defects,search]);
- if(!summary||!user)return <div className="grid min-h-screen place-items-center bg-[#07111d] text-white"><div className="text-center"><span className="mx-auto mb-4 grid size-12 animate-pulse place-items-center rounded-2xl bg-emerald-500"><Activity/></span><b>Loading real plant data...</b>{error&&<p className="mt-3 text-sm text-red-300">{error}</p>}</div></div>;
- return <div className="min-h-screen bg-[#f5f7f8] text-slate-900">
-  {mobile&&<button className="fixed inset-0 z-40 bg-slate-950/50 lg:hidden" onClick={()=>setMobile(false)} aria-label="Close navigation"/>}
-  <aside className={cn('fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[#07111d] px-4 py-6 transition-transform lg:translate-x-0',mobile?'translate-x-0':'-translate-x-full')}><div className="px-2"><Logo/></div><div className="mt-7 rounded-xl border border-slate-700/70 bg-slate-800/70 p-3"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-lg bg-amber-400 text-[11px] font-black text-slate-900">AS</span><div className="min-w-0"><b className="block truncate text-xs text-white">{user.tenant.name}</b><small className="text-[10px] text-slate-500">Primary manufacturing plant</small></div></div></div><p className="mb-2 mt-7 px-3 text-[9px] font-bold tracking-[.18em] text-slate-600">WORKSPACE</p><nav className="space-y-1">{nav.map(([name,Icon],i)=><button key={name} onClick={()=>{setActive(name);setMobile(false)}} className={cn('flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-xs font-medium transition',active===name?'bg-emerald-400/15 text-emerald-300':'text-slate-400 hover:bg-white/5 hover:text-white',i===5&&'mt-6')}><Icon size={17}/><span className="flex-1">{name}</span>{name==='Defects'&&<em className="rounded-full bg-slate-800 px-2 py-0.5 not-italic text-[9px]">{summary.kpis.openIssues}</em>}</button>)}</nav><div className="mt-auto rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/15 to-transparent p-4"><Sparkles className="mb-3 text-emerald-400" size={18}/><b className="text-xs text-white">Database connected</b><p className="mb-0 mt-1 text-[10px] leading-4 text-slate-400">Dashboard values are calculated from tenant-isolated PostgreSQL records.</p></div><button onClick={logout} className="mt-4 flex items-center gap-3 border-t border-slate-800 px-2 pt-4 text-left"><span className="grid size-9 place-items-center rounded-full bg-slate-700 text-[10px] font-bold text-white">{user.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><span className="min-w-0 flex-1"><b className="block truncate text-xs text-white">{user.name}</b><small className="text-[9px] text-slate-500">{user.role.replaceAll('_',' ')}</small></span><LogOut size={15} className="text-slate-500"/></button></aside>
-  <main className="lg:ml-[260px]"><header className="sticky top-0 z-30 flex h-[72px] items-center border-b border-slate-200 bg-white/90 px-4 backdrop-blur-xl md:px-7"><button className="mr-3 grid size-10 place-items-center rounded-xl border border-slate-200 lg:hidden" onClick={()=>setMobile(true)}><Menu size={18}/></button><div><span className="hidden text-xs text-slate-400 sm:inline">{user.tenant.name} &nbsp;/&nbsp; </span><b className="text-xs">{active}</b></div><div className="ml-auto flex items-center gap-2"><div className="hidden h-10 w-56 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 md:flex"><Search size={15} className="text-slate-400"/><input className="w-full bg-transparent text-xs outline-none" placeholder="Search product data..." value={search} onChange={e=>setSearch(e.target.value)}/></div><button className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white"><Bell size={17}/></button><Button onClick={()=>setOpen(true)}><Plus size={16}/><span className="hidden sm:inline">New issue</span></Button></div></header>
-  <div className="mx-auto max-w-[1500px] p-4 md:p-7">{active==='Overview'?<Overview summary={summary} setActive={setActive}/>:active==='Defects'?<Defects defects={filtered} search={search} setSearch={setSearch} openCreate={()=>setOpen(true)}/>:active==='CAPA actions'?<Capa actions={actions}/>:<ModulePlaceholder name={active}/>}</div></main>
-  <Dialog.Root open={open} onOpenChange={setOpen}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-sm"/><Dialog.Content className="fixed left-1/2 top-1/2 z-[90] max-h-[92vh] w-[calc(100%-24px)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-3xl bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 p-6"><div><span className="text-[10px] font-bold tracking-[.16em] text-emerald-700">QUALITY EVENT</span><Dialog.Title className="mt-1 text-xl font-bold">Register a real quality issue</Dialog.Title><Dialog.Description className="mt-1 text-xs text-slate-500">This record will be stored in PostgreSQL for your tenant.</Dialog.Description></div><Dialog.Close className="grid size-9 place-items-center rounded-xl bg-slate-100"><X size={17}/></Dialog.Close></div><form onSubmit={createDefect} className="p-6"><div className="grid gap-4 sm:grid-cols-2"><Field label="Issue title" wide><input name="title" required minLength={3} placeholder="e.g. Microcracks after lamination"/></Field><Field label="Severity"><select name="severity" defaultValue="HIGH"><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select></Field><Field label="Production line"><select name="lineId"><option value="">Select line</option>{refs.lines.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field><Field label="Product"><select name="productId"><option value="">Select product</option>{refs.products.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field><Field label="Owner"><select name="ownerId"><option value="">Unassigned</option>{refs.users.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field><Field label="Batch number"><input name="batchNumber" placeholder="BT-031126-C"/></Field><Field label="Quantity checked"><input name="quantityChecked" type="number" min="0" defaultValue="5000" required/></Field><Field label="Quantity defective"><input name="quantityDefective" type="number" min="0" defaultValue="0" required/></Field><Field label="Initial observation" wide><textarea name="description" rows={3} placeholder="Describe where, when, and how the issue was found..."/></Field></div>{error&&<p className="mt-4 rounded-xl bg-red-50 p-3 text-xs text-red-700">{error}</p>}<div className="mt-6 flex justify-end gap-2"><Dialog.Close asChild><Button type="button" variant="outline">Cancel</Button></Dialog.Close><Button disabled={busy}>{busy?'Saving...':'Create issue & start RCA'}</Button></div></form></Dialog.Content></Dialog.Portal></Dialog.Root>
- </div>
+function Logo() {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-700 text-white">
+        <Activity size={21} />
+      </span>
+      <div>
+        <b className="text-lg text-white">
+          RootIQ <span className="text-emerald-400">AI</span>
+        </b>
+        <small className="block text-[9px] tracking-widest text-slate-500">
+          QUALITY INTELLIGENCE
+        </small>
+      </div>
+    </div>
+  );
+}
+function Pill({ value }: { value: string }) {
+  const color =
+    value === "CRITICAL" || value === "HIGH" || value === "FAILED"
+      ? "bg-red-50 text-red-700"
+      : value === "MEDIUM" ||
+          value === "IN_PROGRESS" ||
+          value === "INVESTIGATING"
+        ? "bg-amber-50 text-amber-700"
+        : value === "CLOSED" || value === "VERIFIED" || value === "COMPLETED"
+          ? "bg-emerald-50 text-emerald-700"
+          : "bg-blue-50 text-blue-700";
+  return (
+    <span
+      className={cn(
+        "inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold",
+        color,
+      )}
+    >
+      {value.replaceAll("_", " ")}
+    </span>
+  );
+}
+function Kpi({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  tone = "emerald",
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: any;
+  tone?: "emerald" | "red" | "amber" | "blue";
+}) {
+  const tones = {
+    emerald: "bg-emerald-50 text-emerald-700",
+    red: "bg-red-50 text-red-600",
+    amber: "bg-amber-50 text-amber-600",
+    blue: "bg-blue-50 text-blue-600",
+  };
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between">
+        <p className="text-xs font-semibold text-slate-500">{label}</p>
+        <span
+          className={cn(
+            "grid size-9 place-items-center rounded-xl",
+            tones[tone],
+          )}
+        >
+          <Icon size={17} />
+        </span>
+      </div>
+      <p className="mb-1 mt-5 text-3xl font-bold tracking-tight text-slate-900">
+        {value}
+      </p>
+      <p className="text-[11px] text-slate-400">{detail}</p>
+    </Card>
+  );
 }
 
-function Field({label,wide,children}:{label:string;wide?:boolean;children:React.ReactNode}){return <label className={cn('text-xs font-semibold text-slate-700',wide&&'sm:col-span-2')}><span className="mb-2 block">{label}</span><div className="[&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-slate-200 [&_input]:px-3 [&_input]:outline-none [&_select]:h-11 [&_select]:w-full [&_select]:rounded-xl [&_select]:border [&_select]:border-slate-200 [&_select]:bg-white [&_select]:px-3 [&_textarea]:w-full [&_textarea]:rounded-xl [&_textarea]:border [&_textarea]:border-slate-200 [&_textarea]:p-3 [&_textarea]:outline-none focus-within:[&>*]:border-emerald-500 focus-within:[&>*]:ring-4 focus-within:[&>*]:ring-emerald-50">{children}</div></label>}
+export default function DashboardPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<User>();
+  const [summary, setSummary] = useState<Summary>();
+  const [defects, setDefects] = useState<Defect[]>([]);
+  const [actions, setActions] = useState<Action[]>([]);
+  const [refs, setRefs] = useState<Refs>({
+    lines: [],
+    products: [],
+    users: [],
+  });
+  const [active, setActive] = useState("Overview");
+  const [mobile, setMobile] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [machine, setMachine] = useState<MachineStatus>({ running: false, cycle: 0 });
+  const [machineBusy, setMachineBusy] = useState(false);
+  const [liveTick, setLiveTick] = useState(0);
+  const [error, setError] = useState("");
+  const [preset, setPreset] = useState<RangePreset>("month");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const latestLoad = useRef(0);
+  const rangeQuery = useMemo(
+    () => buildRangeQuery(preset, customFrom, customTo),
+    [preset, customFrom, customTo],
+  );
+  const load = async () => {
+    const loadId = ++latestLoad.current;
+    const fresh = `_live=${Date.now()}`;
+    try {
+      const [me, s, d, a, r] = await Promise.all([
+        api<User>(`/auth/me?${fresh}`),
+        api<Summary>(`/dashboard/summary?${rangeQuery}&${fresh}`),
+        api<Defect[]>(`/defects?${rangeQuery}&${fresh}`),
+        api<Action[]>(`/capa?${rangeQuery}&${fresh}`),
+        api<Refs>(`/reference?${fresh}`),
+      ]);
+      if (loadId !== latestLoad.current) return;
+      setUser(me);
+      setSummary(s);
+      setDefects(d);
+      setActions(a);
+      setRefs(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to load product data");
+    }
+  };
+  useEffect(() => {
+    load();
+  }, [rangeQuery]);
+  useEffect(() => {
+    if (!machine.running || machine.cycle < 1) return;
+    setLiveTick((tick) => tick + 1);
+    void load();
+  }, [machine.running, machine.cycle, rangeQuery]);
+  useEffect(() => {
+    const checkMachine = async () => {
+      try {
+        const status = await api<MachineStatus>("/operations/virtual-machine");
+        setMachine(status);
+      } catch {
+        // The main dashboard load surfaces connection and authentication errors.
+      }
+    };
+    void checkMachine();
+    const timer = window.setInterval(checkMachine, 1000);
+    return () => window.clearInterval(timer);
+  }, [rangeQuery]);
+  useEffect(() => {
+    const stream = new EventSource(
+      `${API_URL}/operations/virtual-machine/events`,
+      { withCredentials: true },
+    );
+    stream.onmessage = (event) => {
+      try {
+        const status = JSON.parse(event.data) as MachineStatus;
+        setMachine(status);
+        setLiveTick((tick) => tick + 1);
+        void load();
+      } catch {
+        // Invalid events are ignored; the status poll remains as a fallback.
+      }
+    };
+    return () => stream.close();
+  }, [rangeQuery]);
+  async function toggleMachine() {
+    setMachineBusy(true);
+    setError("");
+    try {
+      const action = machine.running ? "stop" : "start";
+      const status = await api<MachineStatus>(`/operations/virtual-machine/${action}`, { method: "POST" });
+      setMachine(status);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to control virtual machine");
+    } finally {
+      setMachineBusy(false);
+    }
+  }
+  async function logout() {
+    await api("/auth/logout", { method: "POST" });
+    router.push("/login");
+  }
+  async function createDefect(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    const fd = new FormData(e.currentTarget);
+    try {
+      await api("/defects", {
+        method: "POST",
+        body: JSON.stringify({
+          title: fd.get("title"),
+          description: fd.get("description"),
+          severity: fd.get("severity"),
+          lineId: fd.get("lineId") || undefined,
+          productId: fd.get("productId") || undefined,
+          ownerId: fd.get("ownerId") || undefined,
+          batchNumber: fd.get("batchNumber") || undefined,
+          quantityChecked: Number(fd.get("quantityChecked")),
+          quantityDefective: Number(fd.get("quantityDefective")),
+        }),
+      });
+      setOpen(false);
+      await load();
+      setActive("Defects");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to create issue");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const filtered = useMemo(
+    () =>
+      defects.filter((x) =>
+        `${x.reference} ${x.title} ${x.batchNumber}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+      ),
+    [defects, search],
+  );
+  if (!summary || !user)
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#07111d] text-white">
+        <div className="text-center">
+          <span className="mx-auto mb-4 grid size-12 animate-pulse place-items-center rounded-2xl bg-emerald-500">
+            <Activity />
+          </span>
+          <b>Loading real plant data...</b>
+          {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+        </div>
+      </div>
+    );
+  return (
+    <div className="min-h-screen bg-[#f5f7f8] text-slate-900">
+      {mobile && (
+        <button
+          className="fixed inset-0 z-40 bg-slate-950/50 lg:hidden"
+          onClick={() => setMobile(false)}
+          aria-label="Close navigation"
+        />
+      )}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[#07111d] px-4 py-6 transition-transform lg:translate-x-0",
+          mobile ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="px-2">
+          <Logo />
+        </div>
+        <div className="mt-7 rounded-xl border border-slate-700/70 bg-slate-800/70 p-3">
+          <div className="flex items-center gap-3">
+            <span className="grid size-9 place-items-center rounded-lg bg-amber-400 text-[11px] font-black text-slate-900">
+              AS
+            </span>
+            <div className="min-w-0">
+              <b className="block truncate text-xs text-white">
+                {user.tenant.name}
+              </b>
+              <small className="text-[10px] text-slate-500">
+                Primary manufacturing plant
+              </small>
+            </div>
+          </div>
+        </div>
+        <p className="mb-2 mt-7 px-3 text-[9px] font-bold tracking-[.18em] text-slate-600">
+          WORKSPACE
+        </p>
+        <nav className="space-y-1">
+          {nav.map(([name, Icon], i) => (
+            <button
+              key={name}
+              onClick={() => {
+                setActive(name);
+                setMobile(false);
+              }}
+              className={cn(
+                "flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-xs font-medium transition",
+                active === name
+                  ? "bg-emerald-400/15 text-emerald-300"
+                  : "text-slate-400 hover:bg-white/5 hover:text-white",
+                i === 5 && "mt-6",
+              )}
+            >
+              <Icon size={17} />
+              <span className="flex-1">{name}</span>
+              {name === "Defects" && (
+                <em className="rounded-full bg-slate-800 px-2 py-0.5 not-italic text-[9px]">
+                  {summary.kpis.openIssues}
+                </em>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="mt-auto rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/15 to-transparent p-4">
+          <Sparkles className="mb-3 text-emerald-400" size={18} />
+          <b className="text-xs text-white">Database connected</b>
+          <p className="mb-0 mt-1 text-[10px] leading-4 text-slate-400">
+            Dashboard values are calculated from tenant-isolated PostgreSQL
+            records.
+          </p>
+        </div>
+        <button
+          onClick={logout}
+          className="mt-4 flex items-center gap-3 border-t border-slate-800 px-2 pt-4 text-left"
+        >
+          <span className="grid size-9 place-items-center rounded-full bg-slate-700 text-[10px] font-bold text-white">
+            {user.name
+              .split(" ")
+              .map((x) => x[0])
+              .slice(0, 2)
+              .join("")}
+          </span>
+          <span className="min-w-0 flex-1">
+            <b className="block truncate text-xs text-white">{user.name}</b>
+            <small className="text-[9px] text-slate-500">
+              {user.role.replaceAll("_", " ")}
+            </small>
+          </span>
+          <LogOut size={15} className="text-slate-500" />
+        </button>
+      </aside>
+      <main className="lg:ml-[260px]">
+        <header className="sticky top-0 z-30 flex h-[72px] items-center border-b border-slate-200 bg-white/90 px-4 backdrop-blur-xl md:px-7">
+          <button
+            className="mr-3 grid size-10 place-items-center rounded-xl border border-slate-200 lg:hidden"
+            onClick={() => setMobile(true)}
+          >
+            <Menu size={18} />
+          </button>
+          <div>
+            <span className="hidden text-xs text-slate-400 sm:inline">
+              {user.tenant.name} &nbsp;/&nbsp;{" "}
+            </span>
+            <b className="text-xs">{active}</b>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant={machine.running ? "outline" : "default"}
+              onClick={toggleMachine}
+              disabled={machineBusy}
+              className={cn(machine.running && "border-red-200 text-red-700 hover:bg-red-50")}
+              title={machine.running ? `Virtual machine running · cycle ${machine.cycle}` : "Start virtual machine"}
+            >
+              {machineBusy ? <Loader2 size={16} className="animate-spin" /> : machine.running ? <Square size={14} /> : <Play size={16} />}
+              <span className="hidden sm:inline">
+                {machineBusy ? "Please wait" : machine.running ? `Stop machine (${machine.cycle})` : "Start virtual machine"}
+              </span>
+            </Button>
+            <div className="hidden h-10 w-56 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 md:flex">
+              <Search size={15} className="text-slate-400" />
+              <input
+                className="w-full bg-transparent text-xs outline-none"
+                placeholder="Search product data..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <button className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white">
+              <Bell size={17} />
+            </button>
+            <Button onClick={() => setOpen(true)}>
+              <Plus size={16} />
+              <span className="hidden sm:inline">New issue</span>
+            </Button>
+          </div>
+        </header>
+        <div className="mx-auto max-w-[1500px] p-4 md:p-7">
+          <DateRangeFilter
+            preset={preset}
+            setPreset={setPreset}
+            from={customFrom}
+            to={customTo}
+            setFrom={setCustomFrom}
+            setTo={setCustomTo}
+          />
+          {active === "Overview" ? (
+            <Overview summary={summary} setActive={setActive} />
+          ) : active === "Defects" ? (
+            <Defects
+              defects={filtered}
+              search={search}
+              setSearch={setSearch}
+              openCreate={() => setOpen(true)}
+            />
+          ) : active === "Root cause analysis" ? (
+            <RcaWorkspace defects={defects} />
+          ) : active === "CAPA actions" ? (
+            <Capa actions={actions} />
+          ) : active === "Inspections" ? (
+            <InspectionsModule rangeQuery={rangeQuery} refreshKey={liveTick} />
+          ) : active === "Production" ? (
+            <ProductionModule rangeQuery={rangeQuery} refreshKey={liveTick} />
+          ) : active === "Equipment" ? (
+            <EquipmentModule />
+          ) : active === "Reports" ? (
+            <ReportsModule defects={defects} />
+          ) : (
+            <ModulePlaceholder name={active} />
+          )}
+        </div>
+      </main>
+      <Dialog.Root open={open} onOpenChange={setOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] max-h-[92vh] w-[calc(100%-24px)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-100 p-6">
+              <div>
+                <span className="text-[10px] font-bold tracking-[.16em] text-emerald-700">
+                  QUALITY EVENT
+                </span>
+                <Dialog.Title className="mt-1 text-xl font-bold">
+                  Register a real quality issue
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-xs text-slate-500">
+                  This record will be stored in PostgreSQL for your tenant.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close className="grid size-9 place-items-center rounded-xl bg-slate-100">
+                <X size={17} />
+              </Dialog.Close>
+            </div>
+            <form onSubmit={createDefect} className="p-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Issue title" wide>
+                  <input
+                    name="title"
+                    required
+                    minLength={3}
+                    placeholder="e.g. Microcracks after lamination"
+                  />
+                </Field>
+                <Field label="Severity">
+                  <select name="severity" defaultValue="HIGH">
+                    <option>LOW</option>
+                    <option>MEDIUM</option>
+                    <option>HIGH</option>
+                    <option>CRITICAL</option>
+                  </select>
+                </Field>
+                <Field label="Production line">
+                  <select name="lineId">
+                    <option value="">Select line</option>
+                    {refs.lines.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Product">
+                  <select name="productId">
+                    <option value="">Select product</option>
+                    {refs.products.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Owner">
+                  <select name="ownerId">
+                    <option value="">Unassigned</option>
+                    {refs.users.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Batch number">
+                  <input name="batchNumber" placeholder="BT-031126-C" />
+                </Field>
+                <Field label="Quantity checked">
+                  <input
+                    name="quantityChecked"
+                    type="number"
+                    min="0"
+                    defaultValue="5000"
+                    required
+                  />
+                </Field>
+                <Field label="Quantity defective">
+                  <input
+                    name="quantityDefective"
+                    type="number"
+                    min="0"
+                    defaultValue="0"
+                    required
+                  />
+                </Field>
+                <Field label="Initial observation" wide>
+                  <textarea
+                    name="description"
+                    rows={3}
+                    placeholder="Describe where, when, and how the issue was found..."
+                  />
+                </Field>
+              </div>
+              {error && (
+                <p className="mt-4 rounded-xl bg-red-50 p-3 text-xs text-red-700">
+                  {error}
+                </p>
+              )}
+              <div className="mt-6 flex justify-end gap-2">
+                <Dialog.Close asChild>
+                  <Button type="button" variant="outline">
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <Button disabled={busy}>
+                  {busy ? "Saving..." : "Create issue & start RCA"}
+                </Button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </div>
+  );
+}
 
-function Overview({summary,setActive}:{summary:Summary;setActive:(x:string)=>void}){const k=summary.kpis;return <><PageTitle eyebrow="MANUFACTURING INTELLIGENCE" title="Quality command center" text="Live performance calculated from inspections, defects, and CAPA records."/><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="First pass yield" value={`${k.firstPassYield}%`} detail="Calculated from inspection records" icon={Gauge}/><Kpi label="Open quality issues" value={String(k.openIssues)} detail={`${k.criticalIssues} critical issues`} icon={AlertTriangle} tone="red"/><Kpi label="CAPA on-time rate" value={`${k.capaOnTimeRate}%`} detail="Completed actions against due dates" icon={CheckCircle2} tone="amber"/><Kpi label="Cost of poor quality" value={`₹${Intl.NumberFormat('en-IN',{notation:'compact'}).format(k.costOfPoorQuality)}`} detail="Recorded production loss" icon={BarChart3} tone="blue"/></div><div className="mt-4 grid gap-4 xl:grid-cols-[1.6fr_1fr]"><Card><CardHeader><div><h3 className="font-bold">Quality trend</h3><p className="mt-1 text-xs text-slate-400">Actual yield from the last 14 inspection days</p></div><span className="flex items-center gap-2 text-[10px] text-slate-500"><i className="size-2 rounded-full bg-emerald-500"/>First pass yield</span></CardHeader><CardContent className="h-[290px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={summary.trend}><defs><linearGradient id="yieldFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#10a58a" stopOpacity={.28}/><stop offset="1" stopColor="#10a58a" stopOpacity={0}/></linearGradient></defs><CartesianGrid vertical={false} stroke="#edf1f3"/><XAxis dataKey="date" tick={{fontSize:10,fill:'#87939c'}} tickLine={false} axisLine={false} tickFormatter={x=>x.slice(5)}/><YAxis domain={[85,100]} tick={{fontSize:10,fill:'#87939c'}} tickLine={false} axisLine={false}/><Tooltip contentStyle={{borderRadius:12,border:'1px solid #e5e9ec',fontSize:12}}/><Area type="monotone" dataKey="yield" stroke="#0e9f84" strokeWidth={3} fill="url(#yieldFill)"/></AreaChart></ResponsiveContainer></CardContent></Card><Card><CardHeader><div><h3 className="font-bold">Quality health</h3><p className="mt-1 text-xs text-slate-400">Current control indicators</p></div><ShieldCheck className="text-emerald-600" size={20}/></CardHeader><CardContent className="space-y-5">{[['Inspection coverage',Math.min(100,summary.trend.length/14*100)],['Issue containment',k.openIssues?Math.max(24,100-k.openIssues*4):100],['CAPA effectiveness',k.capaOnTimeRate],['First pass yield',k.firstPassYield]].map(([label,v])=><div key={String(label)}><div className="mb-2 flex justify-between text-xs"><span className="text-slate-500">{label}</span><b>{Math.round(Number(v))}%</b></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{width:`${v}%`}}/></div></div>)}</CardContent></Card></div><Card className="mt-4 overflow-hidden"><CardHeader><div><h3 className="font-bold">Issues requiring attention</h3><p className="mt-1 text-xs text-slate-400">Most recently updated tenant records</p></div><Button size="sm" variant="ghost" onClick={()=>setActive('Defects')}>View all</Button></CardHeader><IssueTable defects={summary.recentIssues}/></Card></>}
-function Defects({defects,search,setSearch,openCreate}:{defects:Defect[];search:string;setSearch:(x:string)=>void;openCreate:()=>void}){return <><PageTitle eyebrow="QUALITY MANAGEMENT" title="Defect register" text="Track, investigate, and close every manufacturing non-conformance." action={<Button onClick={openCreate}><Plus size={16}/>New issue</Button>}/><div className="mb-4 flex flex-wrap gap-2"><div className="flex h-10 min-w-64 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3"><Search size={15} className="text-slate-400"/><input className="w-full text-xs outline-none" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search reference, title, or batch"/></div><Button variant="outline"><Settings2 size={15}/>Filters</Button></div><Card className="overflow-hidden"><IssueTable defects={defects}/></Card></>}
-function IssueTable({defects}:{defects:Defect[]}){return <div className="overflow-x-auto"><table className="data-table w-full min-w-[760px]"><thead><tr><th>Quality issue</th><th>Severity</th><th>Line</th><th>Status</th><th>Owner</th><th>Detected</th></tr></thead><tbody>{defects.map(x=><tr key={x.id}><td><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-red-50 text-red-500"><AlertTriangle size={15}/></span><div><b className="block text-xs">{x.title}</b><small className="text-[10px] text-slate-400">{x.reference} · {x.product?.name||x.batchNumber||'No product'}</small></div></div></td><td><Pill value={x.severity}/></td><td>{x.line?.name||'—'}</td><td><Pill value={x.status}/></td><td>{x.owner?.name||'Unassigned'}</td><td>{new Date(x.detectedAt).toLocaleDateString()}</td></tr>)}{!defects.length&&<tr><td colSpan={6} className="py-14 text-center text-slate-400">No matching quality issues.</td></tr>}</tbody></table></div>}
-function Capa({actions}:{actions:Action[]}){return <><PageTitle eyebrow="CONTINUOUS IMPROVEMENT" title="CAPA action tracker" text="Corrective, preventive, and containment actions from the database."/><div className="grid gap-3 sm:grid-cols-3"><Kpi label="Open actions" value={String(actions.filter(x=>x.status!=='COMPLETED'&&x.status!=='VERIFIED').length)} detail="Active commitments" icon={ClipboardCheck} tone="blue"/><Kpi label="Due this week" value={String(actions.filter(x=>x.dueAt&&new Date(x.dueAt)<new Date(Date.now()+7*86400000)).length)} detail="Requires planning" icon={CalendarDays} tone="amber"/><Kpi label="Verified" value={String(actions.filter(x=>x.status==='VERIFIED').length)} detail="Effectiveness confirmed" icon={CheckCircle2}/></div><Card className="mt-4 overflow-hidden"><table className="data-table w-full"><thead><tr><th>Action</th><th>Linked issue</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>{actions.map(x=><tr key={x.id}><td><b>{x.title}</b><small className="mt-1 block text-slate-400">{x.type}</small></td><td>{x.defect?.reference||'Independent'}</td><td>{x.owner?.name||'Unassigned'}</td><td>{x.dueAt?new Date(x.dueAt).toLocaleDateString():'—'}</td><td><Pill value={x.status}/></td></tr>)}</tbody></table></Card></>}
-function ModulePlaceholder({name}:{name:string}){return <><PageTitle eyebrow="ROOTIQ PLATFORM" title={name} text="This module is connected to the product architecture and ready for its operational workflow."/><Card><CardContent className="grid min-h-[390px] place-items-center text-center"><div><span className="mx-auto grid size-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><Bot/></span><h3 className="mt-5 text-lg font-bold">{name} module</h3><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">The backend service boundary, authentication, and tenant context are active. Add the plant-specific workflow when its source data is connected.</p></div></CardContent></Card></>}
-function PageTitle({eyebrow,title,text,action}:{eyebrow:string;title:string;text:string;action?:React.ReactNode}){return <div className="mb-6 flex items-end justify-between gap-4"><div><span className="text-[10px] font-bold tracking-[.17em] text-emerald-700">{eyebrow}</span><h1 className="mb-1 mt-2 text-2xl font-bold tracking-tight md:text-3xl">{title}</h1><p className="text-xs text-slate-500 md:text-sm">{text}</p></div>{action}</div>}
+function Field({
+  label,
+  wide,
+  children,
+}: {
+  label: string;
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      className={cn(
+        "text-xs font-semibold text-slate-700",
+        wide && "sm:col-span-2",
+      )}
+    >
+      <span className="mb-2 block">{label}</span>
+      <div className="[&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-slate-200 [&_input]:px-3 [&_input]:outline-none [&_select]:h-11 [&_select]:w-full [&_select]:rounded-xl [&_select]:border [&_select]:border-slate-200 [&_select]:bg-white [&_select]:px-3 [&_textarea]:w-full [&_textarea]:rounded-xl [&_textarea]:border [&_textarea]:border-slate-200 [&_textarea]:p-3 [&_textarea]:outline-none focus-within:[&>*]:border-emerald-500 focus-within:[&>*]:ring-4 focus-within:[&>*]:ring-emerald-50">
+        {children}
+      </div>
+    </label>
+  );
+}
+
+function Overview({
+  summary,
+  setActive,
+}: {
+  summary: Summary;
+  setActive: (x: string) => void;
+}) {
+  const k = summary.kpis;
+  return (
+    <>
+      <PageTitle
+        eyebrow="MANUFACTURING INTELLIGENCE"
+        title="Quality command center"
+        text="Live performance calculated from inspections, defects, and CAPA records."
+      />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi
+          label="First pass yield"
+          value={`${k.firstPassYield}%`}
+          detail="Calculated from inspection records"
+          icon={Gauge}
+        />
+        <Kpi
+          label="Open quality issues"
+          value={String(k.openIssues)}
+          detail={`${k.criticalIssues} critical issues`}
+          icon={AlertTriangle}
+          tone="red"
+        />
+        <Kpi
+          label="CAPA on-time rate"
+          value={`${k.capaOnTimeRate}%`}
+          detail="Completed actions against due dates"
+          icon={CheckCircle2}
+          tone="amber"
+        />
+        <Kpi
+          label="Cost of poor quality"
+          value={`₹${Intl.NumberFormat("en-IN", { notation: "compact" }).format(k.costOfPoorQuality)}`}
+          detail="Recorded production loss"
+          icon={BarChart3}
+          tone="blue"
+        />
+      </div>
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <Card>
+          <CardHeader>
+            <div>
+              <h3 className="font-bold">Quality trend</h3>
+              <p className="mt-1 text-xs text-slate-400">
+                Actual yield from the last 14 inspection days
+              </p>
+            </div>
+            <span className="flex items-center gap-2 text-[10px] text-slate-500">
+              <i className="size-2 rounded-full bg-emerald-500" />
+              First pass yield
+            </span>
+          </CardHeader>
+          <CardContent className="h-[290px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={summary.trend}>
+                <defs>
+                  <linearGradient id="yieldFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#10a58a" stopOpacity={0.28} />
+                    <stop offset="1" stopColor="#10a58a" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke="#edf1f3" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: "#87939c" }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(x) => x.slice(5)}
+                />
+                <YAxis
+                  domain={[85, 100]}
+                  tick={{ fontSize: 10, fill: "#87939c" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: 12,
+                    border: "1px solid #e5e9ec",
+                    fontSize: 12,
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="yield"
+                  stroke="#0e9f84"
+                  strokeWidth={3}
+                  fill="url(#yieldFill)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <div>
+              <h3 className="font-bold">Quality health</h3>
+              <p className="mt-1 text-xs text-slate-400">
+                Current control indicators
+              </p>
+            </div>
+            <ShieldCheck className="text-emerald-600" size={20} />
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {[
+              [
+                "Inspection coverage",
+                Math.min(100, (summary.trend.length / 14) * 100),
+              ],
+              [
+                "Issue containment",
+                k.openIssues ? Math.max(24, 100 - k.openIssues * 4) : 100,
+              ],
+              ["CAPA effectiveness", k.capaOnTimeRate],
+              ["First pass yield", k.firstPassYield],
+            ].map(([label, v]) => (
+              <div key={String(label)}>
+                <div className="mb-2 flex justify-between text-xs">
+                  <span className="text-slate-500">{label}</span>
+                  <b>{Math.round(Number(v))}%</b>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-emerald-500"
+                    style={{ width: `${v}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+      <Card className="mt-4 overflow-hidden">
+        <CardHeader>
+          <div>
+            <h3 className="font-bold">Issues requiring attention</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              Most recently updated tenant records
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setActive("Defects")}
+          >
+            View all
+          </Button>
+        </CardHeader>
+        <IssueTable defects={summary.recentIssues} />
+      </Card>
+    </>
+  );
+}
+function Defects({
+  defects,
+  search,
+  setSearch,
+  openCreate,
+}: {
+  defects: Defect[];
+  search: string;
+  setSearch: (x: string) => void;
+  openCreate: () => void;
+}) {
+  return (
+    <>
+      <PageTitle
+        eyebrow="QUALITY MANAGEMENT"
+        title="Defect register"
+        text="Track, investigate, and close every manufacturing non-conformance."
+        action={
+          <Button onClick={openCreate}>
+            <Plus size={16} />
+            New issue
+          </Button>
+        }
+      />
+      <div className="mb-4 flex flex-wrap gap-2">
+        <div className="flex h-10 min-w-64 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3">
+          <Search size={15} className="text-slate-400" />
+          <input
+            className="w-full text-xs outline-none"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search reference, title, or batch"
+          />
+        </div>
+        <Button variant="outline">
+          <Settings2 size={15} />
+          Filters
+        </Button>
+      </div>
+      <Card className="overflow-hidden">
+        <IssueTable defects={defects} />
+      </Card>
+    </>
+  );
+}
+function IssueTable({ defects }: { defects: Defect[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="data-table w-full min-w-[760px]">
+        <thead>
+          <tr>
+            <th>Quality issue</th>
+            <th>Severity</th>
+            <th>Line</th>
+            <th>Status</th>
+            <th>Owner</th>
+            <th>Detected date & time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {defects.map((x) => (
+            <tr key={x.id}>
+              <td>
+                <div className="flex items-center gap-3">
+                  <span className="grid size-9 place-items-center rounded-xl bg-red-50 text-red-500">
+                    <AlertTriangle size={15} />
+                  </span>
+                  <div>
+                    <b className="block text-xs">{x.title}</b>
+                    <small className="text-[10px] text-slate-400">
+                      {x.reference} ·{" "}
+                      {x.product?.name || x.batchNumber || "No product"}
+                    </small>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <Pill value={x.severity} />
+              </td>
+              <td>{x.line?.name || "—"}</td>
+              <td>
+                <Pill value={x.status} />
+              </td>
+              <td>{x.owner?.name || "Unassigned"}</td>
+              <td>{new Date(x.detectedAt).toLocaleString()}</td>
+            </tr>
+          ))}
+          {!defects.length && (
+            <tr>
+              <td colSpan={6} className="py-14 text-center text-slate-400">
+                No matching quality issues.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+function Capa({ actions }: { actions: Action[] }) {
+  return (
+    <>
+      <PageTitle
+        eyebrow="CONTINUOUS IMPROVEMENT"
+        title="CAPA action tracker"
+        text="Corrective, preventive, and containment actions from the database."
+      />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Kpi
+          label="Open actions"
+          value={String(
+            actions.filter(
+              (x) => x.status !== "COMPLETED" && x.status !== "VERIFIED",
+            ).length,
+          )}
+          detail="Active commitments"
+          icon={ClipboardCheck}
+          tone="blue"
+        />
+        <Kpi
+          label="Due this week"
+          value={String(
+            actions.filter(
+              (x) =>
+                x.dueAt &&
+                new Date(x.dueAt) < new Date(Date.now() + 7 * 86400000),
+            ).length,
+          )}
+          detail="Requires planning"
+          icon={CalendarDays}
+          tone="amber"
+        />
+        <Kpi
+          label="Verified"
+          value={String(actions.filter((x) => x.status === "VERIFIED").length)}
+          detail="Effectiveness confirmed"
+          icon={CheckCircle2}
+        />
+      </div>
+      <Card className="mt-4 overflow-hidden">
+        <table className="data-table w-full">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Linked issue</th>
+              <th>Owner</th>
+              <th>Created date & time</th>
+              <th>Due</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {actions.map((x) => (
+              <tr key={x.id}>
+                <td>
+                  <b>{x.title}</b>
+                  <small className="mt-1 block text-slate-400">{x.type}</small>
+                </td>
+                <td>{x.defect?.reference || "Independent"}</td>
+                <td>{x.owner?.name || "Unassigned"}</td>
+                <td>{new Date(x.createdAt).toLocaleString()}</td>
+                <td>
+                  {x.dueAt ? new Date(x.dueAt).toLocaleDateString() : "—"}
+                </td>
+                <td>
+                  <Pill value={x.status} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </>
+  );
+}
+function ModulePlaceholder({ name }: { name: string }) {
+  return (
+    <>
+      <PageTitle
+        eyebrow="ROOTIQ PLATFORM"
+        title={name}
+        text="This module is connected to the product architecture and ready for its operational workflow."
+      />
+      <Card>
+        <CardContent className="grid min-h-[390px] place-items-center text-center">
+          <div>
+            <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+              <Bot />
+            </span>
+            <h3 className="mt-5 text-lg font-bold">{name} module</h3>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+              The backend service boundary, authentication, and tenant context
+              are active. Add the plant-specific workflow when its source data
+              is connected.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+function PageTitle({
+  eyebrow,
+  title,
+  text,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  text: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-6 flex items-end justify-between gap-4">
+      <div>
+        <span className="text-[10px] font-bold tracking-[.17em] text-emerald-700">
+          {eyebrow}
+        </span>
+        <h1 className="mb-1 mt-2 text-2xl font-bold tracking-tight md:text-3xl">
+          {title}
+        </h1>
+        <p className="text-xs text-slate-500 md:text-sm">{text}</p>
+      </div>
+      {action}
+    </div>
+  );
+}

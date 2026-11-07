@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -61,6 +62,10 @@ model Tenant {
   defects     Defect[]
   actions     CapaAction[]
   inspections Inspection[]
+  productionRecords ProductionRecord[]
+  equipment   Equipment[]
+  maintenanceEvents MaintenanceEvent[]
+  audits      QualityAudit[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 }
@@ -89,6 +94,8 @@ model ProductionLine {
   active    Boolean   @default(true)
   defects   Defect[]
   inspections Inspection[]
+  productionRecords ProductionRecord[]
+  equipment Equipment[]
   @@unique([tenantId, code])
 }
 
@@ -100,6 +107,7 @@ model Product {
   sku       String
   defects   Defect[]
   inspections Inspection[]
+  productionRecords ProductionRecord[]
   @@unique([tenantId, sku])
 }
 
@@ -147,6 +155,10 @@ model RootCause {
   verifiedCause String?
   evidence    Json?
   aiSuggestions Json?
+  fishbone    Json?
+  pareto      Json?
+  fmea        Json?
+  eightD      Json?
   verifiedAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -193,4 +205,76 @@ model Inspection {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   @@index([tenantId, performedAt])
+}
+
+model ProductionRecord {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lineId      String
+  line        ProductionLine @relation(fields: [lineId], references: [id])
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
+  recordDate  DateTime
+  shift       String
+  plannedQty  Int
+  producedQty Int
+  rejectedQty Int
+  downtimeMinutes Int @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([tenantId, lineId, recordDate, shift])
+  @@index([tenantId, recordDate])
+}
+
+model Equipment {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lineId      String?
+  line        ProductionLine? @relation(fields: [lineId], references: [id])
+  code        String
+  name        String
+  type        String
+  status      String   @default("RUNNING")
+  healthScore Int      @default(100)
+  lastMaintenanceAt DateTime?
+  nextMaintenanceAt DateTime?
+  events      MaintenanceEvent[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+}
+
+model MaintenanceEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  type        String
+  description String
+  status      String   @default("OPEN")
+  downtimeMinutes Int  @default(0)
+  startedAt   DateTime @default(now())
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  @@index([tenantId, startedAt])
+}
+
+model QualityAudit {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title       String
+  standard    String
+  status      String   @default("PLANNED")
+  auditDate   DateTime
+  ownerName   String?
+  score       Int?
+  findings    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([tenantId, auditDate])
 }
